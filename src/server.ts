@@ -1,40 +1,40 @@
-import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
-import { connectDB } from "./config/db";
-import authRoutes from "./routes/auth";
-import formRoutes from "./routes/forms";
-import responseRoutes from "./routes/responses";
+import { Server } from "http";
+import mongoose from "mongoose";
+import app from "./app";
+import config from "./config";
 
-// Load env vars
-dotenv.config();
+let server: Server;
 
-const app = express();
+async function bootstrap() {
+  try {
+    await mongoose.connect(config.database_url);
+    console.log(`🛢 Database connected successfully`);
 
-// Connect Database
-connectDB();
+    server = app.listen(config.port, () => {
+      console.log(`🚀 Application listening on port ${config.port}`);
+    });
+  } catch (err) {
+    console.error(`Failed to connect to database`, err);
+  }
 
-// Init Middleware
-app.use(
-  cors({
-    origin: "*", // Adjust as necessary for production
-    credentials: true,
-  })
-);
-app.use(express.json());
+  const exitHandler = () => {
+    if (server) {
+      server.close(() => {
+        console.log("Server closed");
+        process.exit(1);
+      });
+    } else {
+      process.exit(1);
+    }
+  };
 
-// Define Routes
-app.use("/api/auth", authRoutes);
-app.use("/api/forms", formRoutes);
-app.use("/api/forms", responseRoutes); // Mount response routes under /api/forms for nested path resolving
+  const unexpectedErrorHandler = (error: unknown) => {
+    console.error(error);
+    exitHandler();
+  };
 
-// Health check endpoint
-app.get("/api/health", (req, res) => {
-  res.json({ status: "OK", message: "Google Form Clone backend is running" });
-});
+  process.on("uncaughtException", unexpectedErrorHandler);
+  process.on("unhandledRejection", unexpectedErrorHandler);
+}
 
-const PORT = process.env.PORT || 5000;
-
-app.listen(PORT, () => {
-  console.log(`Server started on port ${PORT}`);
-});
+bootstrap();

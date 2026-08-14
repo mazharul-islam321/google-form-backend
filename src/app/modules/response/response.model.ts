@@ -1,17 +1,5 @@
-import mongoose, { Schema, Document } from "mongoose";
-
-export interface IAnswer {
-  itemIndex: number;
-  value: any;
-}
-
-export interface IResponse extends Document {
-  form: mongoose.Types.ObjectId;
-  submittedBy?: mongoose.Types.ObjectId;
-  answers: IAnswer[];
-  createdAt: Date;
-  updatedAt: Date;
-}
+import mongoose, { Schema } from "mongoose";
+import { IAnswer, IResponse } from "./response.interface";
 
 const AnswerSchema = new Schema<IAnswer>({
   itemIndex: {
@@ -42,4 +30,7 @@ const ResponseSchema = new Schema<IResponse>(
   }
 );
 
-export const Response = mongoose.model<IResponse>("Response", ResponseSchema);
+export const FormResponse = mongoose.model<IResponse>(
+  "Response",
+  ResponseSchema
+);

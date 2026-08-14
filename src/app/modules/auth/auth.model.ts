@@ -1,24 +1,18 @@
-import mongoose, { Schema, Document } from "mongoose";
-
-export interface IUser extends Document {
-  email: string;
-  password?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import mongoose, { Schema } from "mongoose";
+import { IUser } from "./auth.interface";
 
 const UserSchema = new Schema<IUser>(
   {
     email: {
       type: String,
-      required: true,
+      required: [true, "Email is required"],
       unique: true,
       trim: true,
       lowercase: true,
     },
     password: {
       type: String,
-      required: true,
+      required: [true, "Password is required"],
     },
   },
   {

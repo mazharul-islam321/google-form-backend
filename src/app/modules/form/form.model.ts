@@ -1,23 +1,5 @@
-import mongoose, { Schema, Document } from "mongoose";
-
-export interface IFormItem {
-  type: "question" | "title";
-  questionTitle?: string;
-  questionType?: "multiplechoice" | "checkbox" | "paragraph" | "shortanswer" | string;
-  options?: string[];
-  title?: string;
-  description?: string;
-  required?: boolean;
-}
-
-export interface IForm extends Document {
-  owner: mongoose.Types.ObjectId;
-  title: string;
-  description: string;
-  items: IFormItem[];
-  createdAt: Date;
-  updatedAt: Date;
-}
+import mongoose, { Schema } from "mongoose";
+import { IForm, IFormItem } from "./form.interface";
 
 const FormItemSchema = new Schema<IFormItem>({
   type: {
