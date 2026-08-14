@@ -3,6 +3,7 @@ import config from "../../config";
 import ApiError from "../../errors/ApiError";
 import handleValidationError from "../../errors/handleValidationError";
 import handleCastError from "../../errors/handleCastError";
+import handleDuplicateError from "../../errors/handleDuplicateError";
 import { IGenericErrorMessage } from "../../interfaces/error";
 
 const globalErrorHandler: ErrorRequestHandler = (
@@ -21,6 +22,11 @@ const globalErrorHandler: ErrorRequestHandler = (
 
   if (error?.name === "ValidationError") {
     const simplifiedError = handleValidationError(error);
+    statusCode = simplifiedError.statusCode;
+    message = simplifiedError.message;
+    errorMessages = simplifiedError.errorMessages;
+  } else if (error?.code === 11000) {
+    const simplifiedError = handleDuplicateError(error);
     statusCode = simplifiedError.statusCode;
     message = simplifiedError.message;
     errorMessages = simplifiedError.errorMessages;

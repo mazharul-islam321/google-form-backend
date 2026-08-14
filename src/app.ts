@@ -29,10 +29,7 @@ app.get("/health", (req: Request, res: Response) => {
   });
 });
 
-// Global Error Handler
-app.use(globalErrorHandler);
-
-// Handle Not Found Routes
+// Handle Not Found Routes (404)
 app.use((req: Request, res: Response, next: NextFunction) => {
   res.status(httpStatus.NOT_FOUND).json({
     success: false,
@@ -45,5 +42,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     ],
   });
 });
+
+// Global Error Handler (Must be placed after all routes and handlers)
+app.use(globalErrorHandler);
 
 export default app;
