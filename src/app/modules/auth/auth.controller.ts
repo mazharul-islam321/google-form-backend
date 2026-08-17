@@ -7,7 +7,7 @@ import { AuthenticatedRequest } from "../../middlewares/auth";
 import ApiError from "../../../errors/ApiError";
 
 const signup = catchAsync(async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { name, email, password } = req.body;
 
   if (!email || !password) {
     throw new ApiError(
@@ -16,7 +16,7 @@ const signup = catchAsync(async (req: Request, res: Response) => {
     );
   }
 
-  const result = await AuthService.signup({ email, password });
+  const result = await AuthService.signup({ name, email, password });
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,

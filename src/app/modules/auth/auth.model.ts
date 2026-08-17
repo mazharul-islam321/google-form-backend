@@ -3,6 +3,11 @@ import { IUser } from "./auth.interface";
 
 const UserSchema = new Schema<IUser>(
   {
+    name: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     email: {
       type: String,
       required: [true, "Email is required"],
