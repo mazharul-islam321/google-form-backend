@@ -22,6 +22,10 @@ const FormSchema = new Schema<IForm>(
       ref: "User",
       required: true,
     },
+    name: {
+      type: String,
+      default: "",
+    },
     title: {
       type: String,
       required: true,

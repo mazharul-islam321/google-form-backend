@@ -17,6 +17,7 @@ export interface IFormItem {
 
 export interface IForm extends Document {
   owner: Types.ObjectId;
+  name?: string;
   title: string;
   description: string;
   items: IFormItem[];
@@ -25,12 +26,14 @@ export interface IForm extends Document {
 }
 
 export interface ICreateFormPayload {
+  name?: string;
   title?: string;
   description?: string;
   items?: IFormItem[];
 }
 
 export interface IUpdateFormPayload {
+  name?: string;
   title?: string;
   description?: string;
   items?: IFormItem[];
