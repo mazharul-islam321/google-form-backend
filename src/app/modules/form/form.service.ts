@@ -10,6 +10,7 @@ const createForm = async (
 ): Promise<IForm> => {
   const newForm = await Form.create({
     owner: new Types.ObjectId(userId),
+    name: payload.name || "Untitled form",
     title: payload.title || "Untitled form",
     description: payload.description || "",
     items: payload.items || [],
@@ -50,6 +51,7 @@ const updateForm = async (
     );
   }
 
+  if (payload.name !== undefined) form.name = payload.name;
   if (payload.title !== undefined) form.title = payload.title;
   if (payload.description !== undefined) form.description = payload.description;
   if (payload.items !== undefined) form.items = payload.items;

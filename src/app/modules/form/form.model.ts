@@ -24,7 +24,7 @@ const FormSchema = new Schema<IForm>(
     },
     name: {
       type: String,
-      default: "",
+      default: "Untitled form",
     },
     title: {
       type: String,
