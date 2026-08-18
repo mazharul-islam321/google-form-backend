@@ -67,6 +67,23 @@ const updateForm = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const updateFormName = catchAsync(async (req: Request, res: Response) => {
+  const user = (req as AuthenticatedRequest).user;
+  if (!user) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Not authenticated.");
+  }
+  const { id } = req.params;
+  const { name } = req.body;
+  const result = await FormService.updateFormName(user.id, id, name);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Form name updated successfully.",
+    data: result,
+  });
+});
+
 const deleteForm = catchAsync(async (req: Request, res: Response) => {
   const user = (req as AuthenticatedRequest).user;
   if (!user) {
@@ -89,5 +106,6 @@ export const FormController = {
   getUserForms,
   getFormById,
   updateForm,
+  updateFormName,
   deleteForm,
 };

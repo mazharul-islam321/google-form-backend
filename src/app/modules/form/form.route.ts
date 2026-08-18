@@ -8,6 +8,7 @@ router.post("/", auth(), FormController.createForm);
 router.get("/", auth(), FormController.getUserForms);
 router.get("/:id", FormController.getFormById);
 router.put("/:id", auth(), FormController.updateForm);
+router.patch("/:id/name", auth(), FormController.updateFormName);
 router.delete("/:id", auth(), FormController.deleteForm);
 
 export const FormRoutes = router;

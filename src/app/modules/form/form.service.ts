@@ -34,6 +34,22 @@ const getFormById = async (formId: string): Promise<IForm | null> => {
   return form;
 };
 
+const updateFormName = async (
+  userId: string,
+  formId: string,
+  name: string
+): Promise<IForm | null> => {
+  const form = await Form.findById(formId);
+  if (!form) {
+    throw new ApiError(httpStatus.NOT_FOUND, "Form not found.");
+  }
+  if (form.owner.toString() !== userId) {
+    throw new ApiError(httpStatus.FORBIDDEN, "Not authorized to update this form.");
+  }
+  form.name = name;
+  return form.save();
+};
+
 const updateForm = async (
   userId: string,
   formId: string,
@@ -80,6 +96,7 @@ export const FormService = {
   createForm,
   getUserForms,
   getFormById,
+  updateFormName,
   updateForm,
   deleteForm,
 };
