@@ -14,6 +14,7 @@ const createForm = async (
     title: payload.title || "Untitled form",
     description: payload.description || "",
     items: payload.items || [],
+    isStarred: payload.isStarred || false,
   });
 
   return newForm;
@@ -50,6 +51,25 @@ const updateFormName = async (
   return form.save();
 };
 
+const toggleFormStar = async (
+  userId: string,
+  formId: string,
+  isStarred: boolean
+): Promise<IForm | null> => {
+  const form = await Form.findById(formId);
+  if (!form) {
+    throw new ApiError(httpStatus.NOT_FOUND, "Form not found.");
+  }
+  if (form.owner.toString() !== userId) {
+    throw new ApiError(
+      httpStatus.FORBIDDEN,
+      "Not authorized to update this form."
+    );
+  }
+  form.isStarred = isStarred;
+  return form.save();
+};
+
 const updateForm = async (
   userId: string,
   formId: string,
@@ -71,6 +91,7 @@ const updateForm = async (
   if (payload.title !== undefined) form.title = payload.title;
   if (payload.description !== undefined) form.description = payload.description;
   if (payload.items !== undefined) form.items = payload.items;
+  if (payload.isStarred !== undefined) form.isStarred = payload.isStarred;
 
   const updatedForm = await form.save();
   return updatedForm;
@@ -97,6 +118,7 @@ export const FormService = {
   getUserForms,
   getFormById,
   updateFormName,
+  toggleFormStar,
   updateForm,
   deleteForm,
 };

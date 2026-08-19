@@ -84,6 +84,23 @@ const updateFormName = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const toggleFormStar = catchAsync(async (req: Request, res: Response) => {
+  const user = (req as AuthenticatedRequest).user;
+  if (!user) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Not authenticated.");
+  }
+  const { id } = req.params;
+  const { isStarred } = req.body;
+  const result = await FormService.toggleFormStar(user.id, id, Boolean(isStarred));
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Form star status updated successfully.",
+    data: result,
+  });
+});
+
 const deleteForm = catchAsync(async (req: Request, res: Response) => {
   const user = (req as AuthenticatedRequest).user;
   if (!user) {
@@ -107,5 +124,6 @@ export const FormController = {
   getFormById,
   updateForm,
   updateFormName,
+  toggleFormStar,
   deleteForm,
 };

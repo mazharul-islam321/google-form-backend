@@ -21,6 +21,7 @@ export interface IForm extends Document {
   title: string;
   description: string;
   items: IFormItem[];
+  isStarred?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,6 +31,7 @@ export interface ICreateFormPayload {
   title?: string;
   description?: string;
   items?: IFormItem[];
+  isStarred?: boolean;
 }
 
 export interface IUpdateFormPayload {
@@ -37,4 +39,5 @@ export interface IUpdateFormPayload {
   title?: string;
   description?: string;
   items?: IFormItem[];
+  isStarred?: boolean;
 }

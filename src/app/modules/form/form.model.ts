@@ -36,6 +36,10 @@ const FormSchema = new Schema<IForm>(
       default: "",
     },
     items: [FormItemSchema],
+    isStarred: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
