@@ -15,6 +15,49 @@ const submitResponse = async (
     throw new ApiError(httpStatus.NOT_FOUND, "Form not found.");
   }
 
+  // 1. Check if the form is accepting responses
+  if (form.settings?.isAcceptingResponses === false) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      form.settings?.closedFormMessage ||
+        "This form is no longer accepting responses."
+    );
+  }
+
+  // 2. Check if deadline has passed
+  if (form.settings?.deadline) {
+    const deadlineDate = new Date(form.settings.deadline);
+    if (!isNaN(deadlineDate.getTime()) && new Date() > deadlineDate) {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        form.settings?.closedFormMessage ||
+          "The deadline for this form has passed. Submissions are no longer accepted."
+      );
+    }
+  }
+
+  // 3. Check Limit to 1 Response per user
+  if (form.settings?.limitOneResponse) {
+    if (!userId) {
+      throw new ApiError(
+        httpStatus.UNAUTHORIZED,
+        "You must be signed in to fill out this form because submissions are limited to 1 response per account."
+      );
+    }
+
+    const existingResponse = await FormResponse.findOne({
+      form: new Types.ObjectId(formId),
+      submittedBy: new Types.ObjectId(userId),
+    });
+
+    if (existingResponse) {
+      throw new ApiError(
+        httpStatus.CONFLICT,
+        "You have already submitted a response to this form."
+      );
+    }
+  }
+
   if (!payload.answers || !Array.isArray(payload.answers)) {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
@@ -25,6 +68,7 @@ const submitResponse = async (
   const newResponse = await FormResponse.create({
     form: new Types.ObjectId(formId),
     submittedBy: userId ? new Types.ObjectId(userId) : undefined,
+    respondentEmail: payload.respondentEmail?.trim() || undefined,
     answers: payload.answers,
   });
 

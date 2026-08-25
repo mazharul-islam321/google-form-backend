@@ -15,12 +15,23 @@ export interface IFormItem {
   required?: boolean;
 }
 
+export interface IFormSettings {
+  collectEmail?: "none" | "verified" | "responder_input";
+  limitOneResponse?: boolean;
+  deadline?: Date | string | null;
+  isAcceptingResponses?: boolean;
+  closedFormMessage?: string;
+  confirmationMessage?: string;
+  showSubmitAnotherLink?: boolean;
+}
+
 export interface IForm extends Document {
   owner: Types.ObjectId;
   name?: string;
   title: string;
   description: string;
   items: IFormItem[];
+  settings?: IFormSettings;
   isStarred?: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -31,6 +42,7 @@ export interface ICreateFormPayload {
   title?: string;
   description?: string;
   items?: IFormItem[];
+  settings?: IFormSettings;
   isStarred?: boolean;
 }
 
@@ -39,5 +51,6 @@ export interface IUpdateFormPayload {
   title?: string;
   description?: string;
   items?: IFormItem[];
+  settings?: IFormSettings;
   isStarred?: boolean;
 }

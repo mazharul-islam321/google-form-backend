@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-import { IForm, IFormItem } from "./form.interface";
+import { IForm, IFormItem, IFormSettings } from "./form.interface";
 
 const FormItemSchema = new Schema<IFormItem>({
   type: {
@@ -14,6 +14,41 @@ const FormItemSchema = new Schema<IFormItem>({
   description: { type: String },
   required: { type: Boolean, default: false },
 });
+
+const FormSettingsSchema = new Schema<IFormSettings>(
+  {
+    collectEmail: {
+      type: String,
+      enum: ["none", "verified", "responder_input"],
+      default: "none",
+    },
+    limitOneResponse: {
+      type: Boolean,
+      default: false,
+    },
+    deadline: {
+      type: Schema.Types.Mixed,
+      default: null,
+    },
+    isAcceptingResponses: {
+      type: Boolean,
+      default: true,
+    },
+    closedFormMessage: {
+      type: String,
+      default: "This form is no longer accepting responses.",
+    },
+    confirmationMessage: {
+      type: String,
+      default: "Your response has been recorded.",
+    },
+    showSubmitAnotherLink: {
+      type: Boolean,
+      default: true,
+    },
+  },
+  { _id: false }
+);
 
 const FormSchema = new Schema<IForm>(
   {
@@ -36,6 +71,10 @@ const FormSchema = new Schema<IForm>(
       default: "",
     },
     items: [FormItemSchema],
+    settings: {
+      type: FormSettingsSchema,
+      default: () => ({}),
+    },
     isStarred: {
       type: Boolean,
       default: false,

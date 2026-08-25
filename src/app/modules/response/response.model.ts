@@ -23,6 +23,10 @@ const ResponseSchema = new Schema<IResponse>(
       type: Schema.Types.ObjectId,
       ref: "User",
     },
+    respondentEmail: {
+      type: String,
+      trim: true,
+    },
     answers: [AnswerSchema],
   },
   {
