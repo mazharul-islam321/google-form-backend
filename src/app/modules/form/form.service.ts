@@ -13,7 +13,9 @@ const createForm = async (
     name: payload.name || "Untitled form",
     title: payload.title || "Untitled form",
     description: payload.description || "",
+    headerImage: payload.headerImage || "",
     items: payload.items || [],
+    settings: payload.settings || {},
     isStarred: payload.isStarred || false,
   });
 
@@ -90,7 +92,11 @@ const updateForm = async (
   if (payload.name !== undefined) form.name = payload.name;
   if (payload.title !== undefined) form.title = payload.title;
   if (payload.description !== undefined) form.description = payload.description;
+  if (payload.headerImage !== undefined) form.headerImage = payload.headerImage;
   if (payload.items !== undefined) form.items = payload.items;
+  if (payload.settings !== undefined) {
+    form.settings = { ...form.settings, ...payload.settings };
+  }
   if (payload.isStarred !== undefined) form.isStarred = payload.isStarred;
 
   const updatedForm = await form.save();

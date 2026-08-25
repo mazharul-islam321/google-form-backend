@@ -70,6 +70,10 @@ const FormSchema = new Schema<IForm>(
       type: String,
       default: "",
     },
+    headerImage: {
+      type: String,
+      default: "",
+    },
     items: [FormItemSchema],
     settings: {
       type: FormSettingsSchema,

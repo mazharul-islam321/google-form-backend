@@ -35,8 +35,9 @@ app.use(
   })
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase JSON and URL-encoded body limits for image uploads (25MB)
+app.use(express.json({ limit: "25mb" }));
+app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
 // API Routes mounting
 app.use("/api/v1", routes);

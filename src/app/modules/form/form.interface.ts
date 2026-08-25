@@ -30,6 +30,7 @@ export interface IForm extends Document {
   name?: string;
   title: string;
   description: string;
+  headerImage?: string;
   items: IFormItem[];
   settings?: IFormSettings;
   isStarred?: boolean;
@@ -41,6 +42,7 @@ export interface ICreateFormPayload {
   name?: string;
   title?: string;
   description?: string;
+  headerImage?: string;
   items?: IFormItem[];
   settings?: IFormSettings;
   isStarred?: boolean;
@@ -50,6 +52,7 @@ export interface IUpdateFormPayload {
   name?: string;
   title?: string;
   description?: string;
+  headerImage?: string;
   items?: IFormItem[];
   settings?: IFormSettings;
   isStarred?: boolean;
