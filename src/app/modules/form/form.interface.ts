@@ -14,6 +14,7 @@ export interface IFormItem {
   description?: string;
   image?: string;
   imageAlignment?: "left" | "center" | "right";
+  hoverText?: string;
   required?: boolean;
 }
 

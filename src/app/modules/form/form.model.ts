@@ -18,6 +18,7 @@ const FormItemSchema = new Schema<IFormItem>({
     enum: ["left", "center", "right"],
     default: "center",
   },
+  hoverText: { type: String, default: "" },
   required: { type: Boolean, default: false },
 });
 
