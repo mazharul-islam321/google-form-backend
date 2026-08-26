@@ -42,7 +42,26 @@ const getFormResponses = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const deleteAllResponses = catchAsync(async (req: Request, res: Response) => {
+  const { formId } = req.params;
+  const user = (req as AuthenticatedRequest).user;
+
+  if (!user) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Not authenticated.");
+  }
+
+  await ResponseService.deleteAllResponses(formId, user.id);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "All responses deleted successfully.",
+    data: null,
+  });
+});
+
 export const ResponseController = {
   submitResponse,
   getFormResponses,
+  deleteAllResponses,
 };

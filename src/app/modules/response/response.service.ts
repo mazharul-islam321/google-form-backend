@@ -98,7 +98,29 @@ const getFormResponses = async (
   return responses;
 };
 
+const deleteAllResponses = async (
+  formId: string,
+  userId: string
+): Promise<void> => {
+  const form = await Form.findById(formId);
+  if (!form) {
+    throw new ApiError(httpStatus.NOT_FOUND, "Form not found.");
+  }
+
+  if (form.owner.toString() !== userId) {
+    throw new ApiError(
+      httpStatus.FORBIDDEN,
+      "Not authorized to delete responses for this form."
+    );
+  }
+
+  await FormResponse.deleteMany({
+    form: new Types.ObjectId(formId),
+  });
+};
+
 export const ResponseService = {
   submitResponse,
   getFormResponses,
+  deleteAllResponses,
 };
