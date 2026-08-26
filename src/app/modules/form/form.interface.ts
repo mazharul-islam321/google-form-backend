@@ -1,7 +1,7 @@
 import { Document, Types } from "mongoose";
 
 export interface IFormItem {
-  type: "question" | "title";
+  type: "question" | "title" | "image";
   questionTitle?: string;
   questionType?:
     | "multiplechoice"
@@ -12,6 +12,8 @@ export interface IFormItem {
   options?: string[];
   title?: string;
   description?: string;
+  image?: string;
+  imageAlignment?: "left" | "center" | "right";
   required?: boolean;
 }
 

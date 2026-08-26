@@ -4,7 +4,7 @@ import { IForm, IFormItem, IFormSettings } from "./form.interface";
 const FormItemSchema = new Schema<IFormItem>({
   type: {
     type: String,
-    enum: ["question", "title"],
+    enum: ["question", "title", "image"],
     required: true,
   },
   questionTitle: { type: String },
@@ -12,6 +12,12 @@ const FormItemSchema = new Schema<IFormItem>({
   options: [{ type: String }],
   title: { type: String },
   description: { type: String },
+  image: { type: String, default: "" },
+  imageAlignment: {
+    type: String,
+    enum: ["left", "center", "right"],
+    default: "center",
+  },
   required: { type: Boolean, default: false },
 });
 
