@@ -1,9 +1,10 @@
 import express from "express";
 import { FormController } from "./form.controller";
-import { auth } from "../../middlewares/auth";
+import { auth, optionalAuth } from "../../middlewares/auth";
 
 const router = express.Router();
 
+router.post("/ai-generate", optionalAuth, FormController.generateFormWithAI);
 router.post("/", auth(), FormController.createForm);
 router.get("/", auth(), FormController.getUserForms);
 router.get("/:id", FormController.getFormById);

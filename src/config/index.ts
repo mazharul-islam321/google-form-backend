@@ -14,5 +14,6 @@ export default {
       process.env.JWT_SECRET || "super_secret_google_form_clone_key_123456",
     expires_in: process.env.JWT_EXPIRES_IN || "7d",
   },
+  gemini_api_key: process.env.GEMINI_API_KEY || "",
 };
 
