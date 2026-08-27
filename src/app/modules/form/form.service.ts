@@ -144,7 +144,7 @@ const generateFormWithAI = async (
           contents: `Create a complete Google Form for: "${promptText}". Provide relevant, high quality questions with clear options.`,
           config: {
             systemInstruction:
-              "You are an expert Google Forms Architect. Your sole job is to design complete, realistic, professional Google Forms based on user prompts. Choose the most appropriate questionType for each field ('multiplechoice', 'checkbox', 'shortanswer', 'paragraph', 'dropdown'). Include 4 to 8 realistic questions. For multiplechoice/checkbox/dropdown questions, always provide 3 to 6 logical options.",
+              "You are an expert Google Forms Architect. Your sole job is to design complete, realistic, professional Google Forms based on user prompts.\n\nCRITICAL NAMING RULES:\n- 'name': The short document file name displayed in the top header. MUST be concise (2 to 4 words max, e.g. 'Coffee Shop Feedback', 'React Developer Application', 'Class 8 Math Quiz', 'Wedding RSVP').\n- 'title': The full, descriptive and engaging title displayed on the main form card (e.g. 'Coffee Shop Customer Satisfaction & Experience Survey', 'Senior React Developer Job Application Form', 'Mathematics Mid-Term Assessment - Grade 8').\n\nQUESTION RULES:\n- Choose the most appropriate questionType for each field ('multiplechoice', 'checkbox', 'shortanswer', 'paragraph', 'dropdown').\n- Include 4 to 8 realistic questions. For multiplechoice/checkbox/dropdown questions, always provide 3 to 6 logical options.",
             responseMimeType: "application/json",
             responseSchema: {
               type: Type.OBJECT,
@@ -170,7 +170,7 @@ const generateFormWithAI = async (
                   },
                 },
               },
-              required: ["title", "description", "items"],
+              required: ["name", "title", "description", "items"],
             },
           },
         });
@@ -209,9 +209,12 @@ const generateFormWithAI = async (
     };
   });
 
+  const finalName = (generatedData.name || "").trim() || "Untitled form";
+  const finalTitle = (generatedData.title || "").trim() || "Untitled form";
+
   const finalPayload: ICreateFormPayload = {
-    name: generatedData.name || generatedData.title || "AI Generated Form",
-    title: generatedData.title || "AI Generated Form",
+    name: finalName,
+    title: finalTitle,
     description: generatedData.description || "",
     headerImage: generatedData.headerImage || "",
     items: sanitizedItems.length > 0 ? sanitizedItems : [
