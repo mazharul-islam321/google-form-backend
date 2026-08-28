@@ -196,6 +196,32 @@ const generateQuestionWithAI = catchAsync(
 	},
 );
 
+const editQuestionWithAI = catchAsync(
+	async (req: Request, res: Response) => {
+		const { instruction, currentQuestion, formTitle } = req.body;
+
+		if (!instruction || typeof instruction !== "string" || instruction.trim().length === 0) {
+			throw new ApiError(
+				httpStatus.BAD_REQUEST,
+				"Instruction is required to edit the question.",
+			);
+		}
+
+		const result = await FormService.editQuestionWithAI(
+			instruction.trim(),
+			currentQuestion || {},
+			formTitle,
+		);
+
+		sendResponse(res, {
+			statusCode: httpStatus.OK,
+			success: true,
+			message: "Question updated successfully with AI.",
+			data: result,
+		});
+	},
+);
+
 export const FormController = {
 	createForm,
 	getUserForms,
@@ -207,4 +233,5 @@ export const FormController = {
 	generateFormWithAI,
 	generateOptionsWithAI,
 	generateQuestionWithAI,
+	editQuestionWithAI,
 };

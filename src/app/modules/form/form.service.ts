@@ -365,6 +365,125 @@ const generateQuestionWithAI = async (
   };
 };
 
+const editQuestionWithAI = async (
+  instruction: string,
+  currentQuestion: Partial<IFormItem> & { isHeader?: boolean; title?: string },
+  formTitle?: string
+): Promise<{ question?: IFormItem; header?: { title: string; description: string } }> => {
+  const isHeader = Boolean(currentQuestion.isHeader || (currentQuestion.type as string) === "header");
+
+  if (config.gemini_api_key && config.gemini_api_key.trim() !== "") {
+    const ai = new GoogleGenAI({ apiKey: config.gemini_api_key.trim() });
+    for (const modelName of CANDIDATE_GEMINI_MODELS) {
+      try {
+        if (isHeader) {
+          const response = await ai.models.generateContent({
+            model: modelName,
+            contents: `Refine/rewrite the following Google Form Title and Description based on the user's instruction.
+Instruction: "${instruction}"
+Current Form Title: "${currentQuestion.title || currentQuestion.questionTitle || formTitle || "Untitled form"}"
+Current Form Description: "${currentQuestion.description || ""}"`,
+            config: {
+              systemInstruction:
+                "You are an expert Google Forms Architect. Polish or rewrite the form title and description to make it professional, engaging, and clear based on the user instruction. Return JSON with 'title' and 'description'.",
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                },
+                required: ["title", "description"],
+              },
+            },
+          });
+
+          if (response.text) {
+            const parsed = JSON.parse(response.text);
+            return {
+              header: {
+                title: parsed.title || "Untitled form",
+                description: parsed.description || "",
+              },
+            };
+          }
+        } else {
+          const response = await ai.models.generateContent({
+            model: modelName,
+            contents: `Modify and refine the following Google Form question according to the user's instruction.
+Instruction: "${instruction}"
+Current Question Title: "${currentQuestion.questionTitle || "Untitled Question"}"
+Current Question Type: "${currentQuestion.questionType || "multiplechoice"}"
+Current Options: ${JSON.stringify(currentQuestion.options || [])}
+${formTitle ? `Form Context: "${formTitle}"` : ""}`,
+            config: {
+              systemInstruction:
+                "You are an expert Google Forms Architect. Your job is to edit, refine, polish, or rewrite the provided question according to the user's instructions (e.g. improving tone, changing question type, rephrasing, generating better options, or adding description guidelines). Always return a complete question object with appropriate questionType and options.",
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  questionTitle: { type: Type.STRING },
+                  questionType: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  options: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING },
+                  },
+                  required: { type: Type.BOOLEAN },
+                },
+                required: ["questionTitle", "questionType"],
+              },
+            },
+          });
+
+          if (response.text) {
+            const parsed = JSON.parse(response.text);
+            const qType = normalizeQuestionType(parsed.questionType || currentQuestion.questionType);
+            const needsOptions = ["multiplechoice", "checkbox", "dropdown"].includes(qType);
+            return {
+              question: {
+                type: "question",
+                questionTitle: parsed.questionTitle || currentQuestion.questionTitle || "Untitled Question",
+                questionType: qType,
+                description: parsed.description || currentQuestion.description || "",
+                options: needsOptions
+                  ? Array.isArray(parsed.options) && parsed.options.length > 0
+                    ? parsed.options
+                    : currentQuestion.options || ["Option 1", "Option 2", "Option 3"]
+                  : [],
+                required: parsed.required !== undefined ? Boolean(parsed.required) : Boolean(currentQuestion.required),
+              },
+            };
+          }
+        }
+      } catch (err: any) {
+        console.warn(`editQuestionWithAI failed with ${modelName}:`, err?.message);
+      }
+    }
+  }
+
+  // Fallback
+  if (isHeader) {
+    return {
+      header: {
+        title: `${currentQuestion.title || currentQuestion.questionTitle || formTitle || "Untitled form"} (${instruction})`,
+        description: currentQuestion.description || "",
+      },
+    };
+  }
+
+  return {
+    question: {
+      type: "question",
+      questionTitle: `${currentQuestion.questionTitle || "Untitled Question"} (${instruction})`,
+      questionType: currentQuestion.questionType || "multiplechoice",
+      options: currentQuestion.options || ["Option 1", "Option 2"],
+      required: Boolean(currentQuestion.required),
+    },
+  };
+};
+
 export const FormService = {
   createForm,
   getUserForms,
@@ -376,4 +495,5 @@ export const FormService = {
   generateFormWithAI,
   generateOptionsWithAI,
   generateQuestionWithAI,
+  editQuestionWithAI,
 };
