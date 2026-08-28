@@ -232,6 +232,139 @@ const generateFormWithAI = async (
   return finalPayload;
 };
 
+const generateOptionsWithAI = async (
+  questionTitle: string,
+  questionType: string = "multiplechoice"
+): Promise<{ options: string[] }> => {
+  if (config.gemini_api_key && config.gemini_api_key.trim() !== "") {
+    const ai = new GoogleGenAI({ apiKey: config.gemini_api_key.trim() });
+    for (const modelName of CANDIDATE_GEMINI_MODELS) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: `Provide 4 to 6 logical, distinct, realistic answer choices for this survey question: "${questionTitle}" (Type: ${questionType}).`,
+          config: {
+            systemInstruction:
+              "You are a survey and form design specialist. Provide 4 to 6 concise, realistic choice options for the given question. Return only a JSON array of option strings.",
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                options: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                },
+              },
+              required: ["options"],
+            },
+          },
+        });
+
+        if (response.text) {
+          const parsed = JSON.parse(response.text);
+          if (Array.isArray(parsed.options) && parsed.options.length > 0) {
+            return { options: parsed.options.map((opt: any) => String(opt).trim()) };
+          }
+        }
+      } catch (err: any) {
+        console.warn(`generateOptionsWithAI failed with ${modelName}:`, err?.message);
+      }
+    }
+  }
+
+  // Fallback options based on keywords
+  const q = questionTitle.toLowerCase();
+  if (q.includes("experience") || q.includes("year")) {
+    return { options: ["Less than 1 year", "1-2 years", "3-5 years", "5+ years"] };
+  }
+  if (q.includes("rate") || q.includes("satisfied") || q.includes("satisfaction") || q.includes("how was")) {
+    return { options: ["Very Satisfied", "Satisfied", "Neutral", "Unsatisfied", "Very Unsatisfied"] };
+  }
+  if (q.includes("agree")) {
+    return { options: ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"] };
+  }
+  if (q.includes("how often") || q.includes("frequency")) {
+    return { options: ["Daily", "Weekly", "Monthly", "Rarely", "Never"] };
+  }
+  if (q.includes("gender")) {
+    return { options: ["Female", "Male", "Non-binary", "Prefer not to say"] };
+  }
+  if (q.includes("recommend")) {
+    return { options: ["Definitely", "Probably", "Not Sure", "Probably Not", "Definitely Not"] };
+  }
+
+  return {
+    options: ["Option 1", "Option 2", "Option 3", "Option 4"],
+  };
+};
+
+const generateQuestionWithAI = async (
+  promptText: string,
+  context?: string
+): Promise<{ question: IFormItem }> => {
+  if (config.gemini_api_key && config.gemini_api_key.trim() !== "") {
+    const ai = new GoogleGenAI({ apiKey: config.gemini_api_key.trim() });
+    for (const modelName of CANDIDATE_GEMINI_MODELS) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: `Create 1 single well-formulated question for a Google Form based on: "${promptText}". ${context ? `Form Context: "${context}".` : ""}`,
+          config: {
+            systemInstruction:
+              "You are a Google Forms expert. Generate 1 single well-formulated question matching the user prompt. Select the best questionType ('multiplechoice', 'checkbox', 'shortanswer', 'paragraph', 'dropdown'). For multiplechoice/checkbox/dropdown, provide 3 to 6 logical options.",
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                questionTitle: { type: Type.STRING },
+                questionType: { type: Type.STRING },
+                options: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                },
+                required: { type: Type.BOOLEAN },
+              },
+              required: ["questionTitle", "questionType"],
+            },
+          },
+        });
+
+        if (response.text) {
+          const parsed = JSON.parse(response.text);
+          const qType = normalizeQuestionType(parsed.questionType);
+          const needsOptions = ["multiplechoice", "checkbox", "dropdown"].includes(qType);
+          return {
+            question: {
+              type: "question",
+              questionTitle: parsed.questionTitle || "Untitled Question",
+              questionType: qType,
+              options: needsOptions
+                ? Array.isArray(parsed.options) && parsed.options.length > 0
+                  ? parsed.options
+                  : ["Option 1", "Option 2", "Option 3"]
+                : [],
+              required: Boolean(parsed.required),
+            },
+          };
+        }
+      } catch (err: any) {
+        console.warn(`generateQuestionWithAI failed with ${modelName}:`, err?.message);
+      }
+    }
+  }
+
+  // Fallback single question
+  return {
+    question: {
+      type: "question",
+      questionTitle: promptText.trim() || "Untitled Question",
+      questionType: "multiplechoice",
+      options: ["Option 1", "Option 2", "Option 3"],
+      required: false,
+    },
+  };
+};
+
 export const FormService = {
   createForm,
   getUserForms,
@@ -241,4 +374,6 @@ export const FormService = {
   updateForm,
   deleteForm,
   generateFormWithAI,
+  generateOptionsWithAI,
+  generateQuestionWithAI,
 };

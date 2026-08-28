@@ -146,6 +146,56 @@ const generateFormWithAI = catchAsync(async (req: Request, res: Response) => {
 	});
 });
 
+const generateOptionsWithAI = catchAsync(
+	async (req: Request, res: Response) => {
+		const { questionTitle, questionType } = req.body;
+
+		if (!questionTitle || typeof questionTitle !== "string") {
+			throw new ApiError(
+				httpStatus.BAD_REQUEST,
+				"Question title is required to generate options.",
+			);
+		}
+
+		const result = await FormService.generateOptionsWithAI(
+			questionTitle.trim(),
+			questionType,
+		);
+
+		sendResponse(res, {
+			statusCode: httpStatus.OK,
+			success: true,
+			message: "Options generated successfully with AI.",
+			data: result,
+		});
+	},
+);
+
+const generateQuestionWithAI = catchAsync(
+	async (req: Request, res: Response) => {
+		const { prompt, context } = req.body;
+
+		if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
+			throw new ApiError(
+				httpStatus.BAD_REQUEST,
+				"Prompt is required to generate a question.",
+			);
+		}
+
+		const result = await FormService.generateQuestionWithAI(
+			prompt.trim(),
+			context,
+		);
+
+		sendResponse(res, {
+			statusCode: httpStatus.OK,
+			success: true,
+			message: "Question generated successfully with AI.",
+			data: result,
+		});
+	},
+);
+
 export const FormController = {
 	createForm,
 	getUserForms,
@@ -155,4 +205,6 @@ export const FormController = {
 	toggleFormStar,
 	deleteForm,
 	generateFormWithAI,
+	generateOptionsWithAI,
+	generateQuestionWithAI,
 };
