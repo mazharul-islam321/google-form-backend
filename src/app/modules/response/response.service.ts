@@ -8,6 +8,7 @@ import { FormResponse } from "./response.model";
 const submitResponse = async (
   formId: string,
   userId: string | undefined,
+  userEmail: string | undefined,
   payload: ISubmitResponsePayload
 ): Promise<IResponse> => {
   const form = await Form.findById(formId);
@@ -36,7 +37,17 @@ const submitResponse = async (
     }
   }
 
-  // 3. Check Limit to 1 Response per user
+  // 3. Check Verified Account email requirement
+  if (form.settings?.collectEmail === "verified") {
+    if (!userId || !userEmail) {
+      throw new ApiError(
+        httpStatus.UNAUTHORIZED,
+        "You must be signed in to fill out this form."
+      );
+    }
+  }
+
+  // 4. Check Limit to 1 Response per user
   if (form.settings?.limitOneResponse) {
     if (!userId) {
       throw new ApiError(
@@ -65,10 +76,16 @@ const submitResponse = async (
     );
   }
 
+  // Determine final recorded email
+  const finalEmail =
+    form.settings?.collectEmail === "verified"
+      ? userEmail
+      : payload.respondentEmail?.trim() || userEmail || undefined;
+
   const newResponse = await FormResponse.create({
     form: new Types.ObjectId(formId),
     submittedBy: userId ? new Types.ObjectId(userId) : undefined,
-    respondentEmail: payload.respondentEmail?.trim() || undefined,
+    respondentEmail: finalEmail,
     answers: payload.answers,
   });
 

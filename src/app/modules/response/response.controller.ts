@@ -13,6 +13,7 @@ const submitResponse = catchAsync(async (req: Request, res: Response) => {
   const result = await ResponseService.submitResponse(
     formId,
     user?.id,
+    user?.email,
     req.body
   );
 
