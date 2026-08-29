@@ -2,6 +2,7 @@ import express from "express";
 import { AuthRoutes } from "../modules/auth/auth.route";
 import { FormRoutes } from "../modules/form/form.route";
 import { ResponseRoutes } from "../modules/response/response.route";
+import { AiRoutes } from "../modules/ai/ai.route";
 
 const router = express.Router();
 
@@ -17,6 +18,10 @@ const moduleRoutes = [
   {
     path: "/forms",
     route: ResponseRoutes,
+  },
+  {
+    path: "/ai",
+    route: AiRoutes,
   },
 ];
 
