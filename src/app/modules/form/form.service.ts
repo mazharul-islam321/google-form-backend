@@ -144,7 +144,7 @@ const generateFormWithAI = async (
           contents: `Create a complete Google Form for: "${promptText}". Provide relevant, high quality questions with clear options.`,
           config: {
             systemInstruction:
-              "You are an expert Google Forms Architect. Your sole job is to design complete, realistic, professional Google Forms based on user prompts.\n\nCRITICAL NAMING RULES:\n- 'name': The short document file name displayed in the top header. MUST be concise (2 to 4 words max, e.g. 'Coffee Shop Feedback', 'React Developer Application', 'Class 8 Math Quiz', 'Wedding RSVP').\n- 'title': The full, descriptive and engaging title displayed on the main form card (e.g. 'Coffee Shop Customer Satisfaction & Experience Survey', 'Senior React Developer Job Application Form', 'Mathematics Mid-Term Assessment - Grade 8').\n\nQUESTION RULES:\n- Choose the most appropriate questionType for each field ('multiplechoice', 'checkbox', 'shortanswer', 'paragraph', 'dropdown').\n- Include 4 to 8 realistic questions. For multiplechoice/checkbox/dropdown questions, always provide 3 to 6 logical options.",
+              "You are an expert Google Forms Architect. Your sole job is to design complete, realistic, professional Google Forms based on user prompts.\n\nCRITICAL LANGUAGE RULE:\n- ALWAYS detect the language and script of the user's prompt (e.g. Bengali / বাংলা, Spanish, French, Arabic, Hindi, English, etc.) and generate ALL form names, titles, descriptions, question titles, and options in that EXACT SAME language and script as the prompt. If the prompt is written in Bengali, the entire form MUST be in Bengali.\n\nCRITICAL NAMING RULES:\n- 'name': The short document file name displayed in the top header in the prompt's language. MUST be concise (2 to 4 words max, e.g. 'সাধারণ জ্ঞান কুইজ', 'Coffee Shop Feedback', 'Class 8 Math Quiz').\n- 'title': The full, descriptive and engaging title displayed on the main form card in the prompt's language.\n\nQUESTION RULES:\n- Choose the most appropriate questionType for each field ('multiplechoice', 'checkbox', 'shortanswer', 'paragraph', 'dropdown').\n- Include 4 to 8 realistic questions. For multiplechoice/checkbox/dropdown questions, always provide 3 to 6 logical options in the prompt's language.",
             responseMimeType: "application/json",
             responseSchema: {
               type: Type.OBJECT,
@@ -245,7 +245,7 @@ const generateOptionsWithAI = async (
           contents: `Provide 4 to 6 logical, distinct, realistic answer choices for this survey question: "${questionTitle}" (Type: ${questionType}).`,
           config: {
             systemInstruction:
-              "You are a survey and form design specialist. Provide 4 to 6 concise, realistic choice options for the given question. Return only a JSON array of option strings.",
+              "You are a survey and form design specialist. Provide 4 to 6 concise, realistic choice options in the EXACT SAME language and script as the provided question (e.g. if question is in Bengali / বাংলা, return options in Bengali). Return only a JSON array of option strings.",
             responseMimeType: "application/json",
             responseSchema: {
               type: Type.OBJECT,
@@ -311,7 +311,7 @@ const generateQuestionWithAI = async (
           contents: `Create 1 single well-formulated question for a Google Form based on: "${promptText}". ${context ? `Form Context: "${context}".` : ""}`,
           config: {
             systemInstruction:
-              "You are a Google Forms expert. Generate 1 single well-formulated question matching the user prompt. Select the best questionType ('multiplechoice', 'checkbox', 'shortanswer', 'paragraph', 'dropdown'). For multiplechoice/checkbox/dropdown, provide 3 to 6 logical options.",
+              "You are a Google Forms expert. Generate 1 single well-formulated question matching the user prompt. CRITICAL LANGUAGE RULE: Always detect and match the language and script of the prompt (e.g. Bengali / বাংলা). If the prompt is in Bengali, generate the question and options in Bengali. Select the best questionType ('multiplechoice', 'checkbox', 'shortanswer', 'paragraph', 'dropdown'). For multiplechoice/checkbox/dropdown, provide 3 to 6 logical options.",
             responseMimeType: "application/json",
             responseSchema: {
               type: Type.OBJECT,
@@ -385,7 +385,7 @@ Current Form Title: "${currentQuestion.title || currentQuestion.questionTitle ||
 Current Form Description: "${currentQuestion.description || ""}"`,
             config: {
               systemInstruction:
-                "You are an expert Google Forms Architect. Polish or rewrite the form title and description to make it professional, engaging, and clear based on the user instruction. Return JSON with 'title' and 'description'.",
+                "You are an expert Google Forms Architect. Polish or rewrite the form title and description to make it professional, engaging, and clear based on the user instruction. CRITICAL: Preserve and use the same language and script (e.g. Bengali / বাংলা if the instruction or current text is in Bengali). Return JSON with 'title' and 'description'.",
               responseMimeType: "application/json",
               responseSchema: {
                 type: Type.OBJECT,
