@@ -194,13 +194,7 @@ const generateFormWithAI = async (
     ],
   };
 
-  // If user is authenticated, save directly to MongoDB and return created document
-  if (userId) {
-    const saved = await FormService.createForm(userId, finalPayload);
-    return saved;
-  }
-
-  // Otherwise return structured draft payload for guest
+  // Return structured form payload draft for preview & confirmation
   return finalPayload;
 };
 
