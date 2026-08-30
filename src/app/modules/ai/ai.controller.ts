@@ -106,9 +106,36 @@ const editQuestionWithAI = catchAsync(
 	},
 );
 
+const generateImageWithAI = catchAsync(
+	async (req: Request, res: Response) => {
+		const { prompt, aspectRatio, style } = req.body;
+
+		if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
+			throw new ApiError(
+				httpStatus.BAD_REQUEST,
+				"Prompt is required to generate an image.",
+			);
+		}
+
+		const result = await AiService.generateImageWithAI(
+			prompt.trim(),
+			aspectRatio || "16:9",
+			style,
+		);
+
+		sendResponse(res, {
+			statusCode: httpStatus.OK,
+			success: true,
+			message: "Image generated successfully with AI.",
+			data: result,
+		});
+	},
+);
+
 export const AiController = {
 	generateFormWithAI,
 	generateOptionsWithAI,
 	generateQuestionWithAI,
 	editQuestionWithAI,
+	generateImageWithAI,
 };

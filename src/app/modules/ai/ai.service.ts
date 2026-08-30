@@ -485,9 +485,47 @@ ${formTitle ? `Form Context: "${formTitle}"` : ""}`,
   };
 };
 
+const generateImageWithAI = async (
+  promptText: string,
+  aspectRatio: string = "16:9",
+  style?: string
+): Promise<{ imageUrl: string }> => {
+  const cleanPrompt = promptText.trim();
+  const styleInstruction = style ? `, in ${style} aesthetic style` : "";
+  const enhancedPrompt = `${cleanPrompt}${styleInstruction}, clean high resolution, professional quality for Google Form`;
+
+  const width = aspectRatio === "16:9" ? 1200 : aspectRatio === "4:3" ? 800 : 800;
+  const height = aspectRatio === "16:9" ? 675 : aspectRatio === "4:3" ? 600 : 800;
+  const seed = Math.floor(Math.random() * 999999);
+  const encodedPrompt = encodeURIComponent(enhancedPrompt);
+  const generatorUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true`;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    const response = await fetch(generatorUrl, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (response.ok) {
+      const buffer = await response.arrayBuffer();
+      if (buffer && buffer.byteLength > 0) {
+        const base64 = Buffer.from(buffer).toString("base64");
+        const mimeType = response.headers.get("content-type") || "image/jpeg";
+        return { imageUrl: `data:${mimeType};base64,${base64}` };
+      }
+    }
+  } catch (err: any) {
+    console.warn("Direct image buffer download fallback:", err?.message);
+  }
+
+  // Fallback to direct URL if buffer conversion timed out
+  return { imageUrl: generatorUrl };
+};
+
 export const AiService = {
   generateFormWithAI,
   generateOptionsWithAI,
   generateQuestionWithAI,
   editQuestionWithAI,
+  generateImageWithAI,
 };
