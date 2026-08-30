@@ -4,10 +4,11 @@ import { IFormItem, ICreateFormPayload } from "../form/form.interface";
 import { FormService } from "../form/form.service";
 
 const CANDIDATE_GEMINI_MODELS = [
+  "gemini-3.5-flash-lite",
+  "gemini-3.5-flash",
+  "gemini-3.6-flash",
+  "gemini-3.7-flash",
   "gemini-2.5-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
-  "gemini-1.5-pro",
 ];
 
 const normalizeQuestionType = (raw: string | undefined): string => {
@@ -149,7 +150,8 @@ const generateFormWithAI = async (
 
         const textResponse = response.text;
         if (textResponse) {
-          generatedData = JSON.parse(textResponse);
+          const cleanText = textResponse.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+          generatedData = JSON.parse(cleanText);
           if (generatedData && Array.isArray(generatedData.items) && generatedData.items.length > 0) {
             break;
           }
@@ -267,51 +269,75 @@ const generateOptionsWithAI = async (
 const generateQuestionWithAI = async (
   promptText: string,
   context?: string
-): Promise<{ question: IFormItem }> => {
+): Promise<{ questions: IFormItem[] }> => {
+  const cleanPrompt = promptText.trim();
+  const effectiveContext = context && context.trim() !== "Untitled form" ? context.trim() : "";
+
   if (config.gemini_api_key && config.gemini_api_key.trim() !== "") {
     const ai = new GoogleGenAI({ apiKey: config.gemini_api_key.trim() });
     for (const modelName of CANDIDATE_GEMINI_MODELS) {
       try {
         const response = await ai.models.generateContent({
           model: modelName,
-          contents: `Create 1 single well-formulated question for a Google Form based on: "${promptText}". ${context ? `Form Context: "${context}".` : ""}`,
+          contents: `Create Google Form questions for: "${cleanPrompt}". ${effectiveContext ? `Form Context / Topic: "${effectiveContext}".` : "Context: General project / survey topic"}`,
           config: {
             systemInstruction:
-              "You are a Google Forms expert. Generate 1 single well-formulated question matching the user prompt. CRITICAL LANGUAGE RULE: Always detect and match the language and script of the prompt (e.g. Bengali / বাংলা). If the prompt is in Bengali, generate the question and options in Bengali. Select the best questionType ('multiplechoice', 'checkbox', 'shortanswer', 'paragraph'). For multiplechoice/checkbox, provide 3 to 6 logical options.",
+              "You are an expert Google Forms Architect.\n\nCRITICAL QUESTION COUNT RULES:\n- If the user prompt requests a specific number of questions (e.g. '1 question', '2 questions', '3 questions', '5 questions'), generate EXACTLY that number of questions.\n- If NO number of questions is specified in the prompt, generate 2 to 4 diverse, high-quality questions covering different aspects of the topic.\n- Only generate 1 single question if the prompt explicitly asks for 1 question.\n\nCRITICAL LANGUAGE RULE:\n- ALWAYS detect and match the language and script of the user's prompt (e.g. Bengali / বাংলা). If the prompt is in Bengali, generate questions and all options in Bengali.\n\nQUESTION RULES:\n- Never output placeholder names like 'Option 1, Option 2, Option 3'. Always create realistic, relevant options matching the question.\n- Select the best questionType ('multiplechoice', 'checkbox', 'shortanswer', 'paragraph') for each question.\n- For multiplechoice and checkbox, provide 3 to 5 realistic, logical options.",
             responseMimeType: "application/json",
             responseSchema: {
               type: Type.OBJECT,
               properties: {
-                questionTitle: { type: Type.STRING },
-                questionType: { type: Type.STRING },
-                options: {
+                questions: {
                   type: Type.ARRAY,
-                  items: { type: Type.STRING },
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      type: { type: Type.STRING },
+                      questionTitle: { type: Type.STRING },
+                      questionType: { type: Type.STRING },
+                      options: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                      },
+                      required: { type: Type.BOOLEAN },
+                    },
+                    required: ["type", "questionTitle", "questionType"],
+                  },
                 },
-                required: { type: Type.BOOLEAN },
               },
-              required: ["questionTitle", "questionType"],
+              required: ["questions"],
             },
           },
         });
 
         if (response.text) {
-          const parsed = JSON.parse(response.text);
-          const qType = normalizeQuestionType(parsed.questionType);
-          const needsOptions = ["multiplechoice", "checkbox"].includes(qType);
-          return {
-            question: {
-              type: "question",
-              questionTitle: parsed.questionTitle || "Untitled Question",
-              questionType: qType,
-              options: needsOptions
-                ? Array.isArray(parsed.options) && parsed.options.length > 0
-                  ? parsed.options
-                  : ["Option 1", "Option 2", "Option 3"]
-                : [],
-              required: Boolean(parsed.required),
-            },
-          };
+          const cleanText = response.text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+          const parsed = JSON.parse(cleanText);
+          const rawQuestions = Array.isArray(parsed.questions)
+            ? parsed.questions
+            : parsed.question
+            ? [parsed.question]
+            : [];
+
+          if (rawQuestions.length > 0) {
+            const sanitizedQuestions: IFormItem[] = rawQuestions.map((q: any) => {
+              const qType = normalizeQuestionType(q.questionType);
+              const needsOptions = ["multiplechoice", "checkbox"].includes(qType);
+              return {
+                type: "question",
+                questionTitle: q.questionTitle || "Untitled Question",
+                questionType: qType,
+                options: needsOptions
+                  ? Array.isArray(q.options) && q.options.length > 0
+                    ? q.options
+                    : ["Yes", "No", "Maybe"]
+                  : [],
+                required: Boolean(q.required),
+              };
+            });
+
+            return { questions: sanitizedQuestions };
+          }
         }
       } catch (err: any) {
         console.warn(`generateQuestionWithAI failed with ${modelName}:`, err?.message);
@@ -319,16 +345,22 @@ const generateQuestionWithAI = async (
     }
   }
 
-  // Fallback single question
-  return {
-    question: {
+  // Smart fallback matching question count if AI is offline
+  const matchNum = cleanPrompt.match(/(\d+)\s*(?:question|item)/i);
+  const count = matchNum ? Math.min(Math.max(parseInt(matchNum[1], 10), 1), 5) : 2;
+  const fallbackList: IFormItem[] = [];
+
+  for (let i = 1; i <= count; i++) {
+    fallbackList.push({
       type: "question",
-      questionTitle: promptText.trim() || "Untitled Question",
+      questionTitle: count === 1 ? cleanPrompt || "Untitled Question" : `Question ${i}: ${cleanPrompt}`,
       questionType: "multiplechoice",
-      options: ["Option 1", "Option 2", "Option 3"],
+      options: ["Strongly Agree", "Agree", "Neutral", "Disagree"],
       required: false,
-    },
-  };
+    });
+  }
+
+  return { questions: fallbackList };
 };
 
 const editQuestionWithAI = async (
@@ -365,7 +397,8 @@ Current Form Description: "${currentQuestion.description || ""}"`,
           });
 
           if (response.text) {
-            const parsed = JSON.parse(response.text);
+            const cleanText = response.text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+            const parsed = JSON.parse(cleanText);
             return {
               header: {
                 title: parsed.title || "Untitled form",
@@ -404,7 +437,8 @@ ${formTitle ? `Form Context: "${formTitle}"` : ""}`,
           });
 
           if (response.text) {
-            const parsed = JSON.parse(response.text);
+            const cleanText = response.text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+            const parsed = JSON.parse(cleanText);
             const qType = normalizeQuestionType(parsed.questionType || currentQuestion.questionType);
             const needsOptions = ["multiplechoice", "checkbox", "dropdown"].includes(qType);
             return {
