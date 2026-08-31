@@ -1,271 +1,113 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import config from "../../../config";
+import { Type } from "@google/genai";
 import { IFormItem, ICreateFormPayload } from "../form/form.interface";
-import { FormService } from "../form/form.service";
+import { IAIResponsesSummary } from "./ai.constants";
+import {
+  callGeminiJson,
+  normalizeQuestionType,
+  sanitizeQuestionItems,
+} from "./ai.helpers";
+import {
+  generateFallbackForm,
+  getFallbackOptions,
+  getFallbackQuestions,
+  getFallbackSummary,
+} from "./ai.fallbacks";
 
-const CANDIDATE_GEMINI_MODELS = [
-  "gemini-3.5-flash-lite",
-  "gemini-3.5-flash",
-  "gemini-3.6-flash",
-  "gemini-3.7-flash",
-  "gemini-2.5-flash",
-];
-
-const normalizeQuestionType = (raw: string | undefined): string => {
-  if (!raw) return "multiplechoice";
-  const lower = raw.toLowerCase().replace(/[-_\s]/g, "");
-  if (lower.includes("multi") || lower === "mcq" || lower === "radio" || lower.includes("drop") || lower.includes("select")) return "multiplechoice";
-  if (lower.includes("check") || lower.includes("box")) return "checkbox";
-  if (lower.includes("para") || lower.includes("long") || lower.includes("area")) return "paragraph";
-  if (lower.includes("short") || lower.includes("text") || lower.includes("input")) return "shortanswer";
-  return "multiplechoice";
-};
-
-const generateFallbackForm = (promptText: string): ICreateFormPayload => {
-  const p = promptText.toLowerCase();
-
-  if (p.includes("quiz") || p.includes("exam") || p.includes("test")) {
-    return {
-      name: "Knowledge Assessment Quiz",
-      title: "Knowledge Assessment & Quiz",
-      description: "Please answer all the questions below to test your knowledge.",
-      headerImage: "",
-      items: [
-        {
-          type: "question",
-          questionTitle: "What is the primary topic covered in this assessment?",
-          questionType: "multiplechoice",
-          options: ["Core Fundamentals", "Advanced Concepts", "Practical Application", "All of the Above"],
-          required: true,
-        },
-        {
-          type: "question",
-          questionTitle: "Select all concepts that apply:",
-          questionType: "checkbox",
-          options: ["Theoretical Principles", "Practical Techniques", "Case Studies", "Historical Context"],
-          required: false,
-        },
-        {
-          type: "question",
-          questionTitle: "Please explain a key concept in your own words:",
-          questionType: "paragraph",
-          options: [],
-          required: true,
-        },
-      ],
-    };
-  }
-
-  return {
-    name: promptText.slice(0, 30) || "Feedback Survey",
-    title: promptText || "Feedback Survey Form",
-    description: "Thank you for taking the time to complete this form. Your feedback is very valuable to us.",
-    headerImage: "",
-    items: [
-      {
-        type: "question",
-        questionTitle: "How would you rate your overall experience?",
-        questionType: "multiplechoice",
-        options: ["Excellent", "Very Good", "Good", "Fair", "Poor"],
-        required: true,
-      },
-      {
-        type: "question",
-        questionTitle: "What did you like most?",
-        questionType: "checkbox",
-        options: ["Ease of Use", "Speed & Performance", "Design & Aesthetics", "Customer Support", "Value for Money"],
-        required: false,
-      },
-      {
-        type: "question",
-        questionTitle: "What areas do you think need improvement?",
-        questionType: "paragraph",
-        options: [],
-        required: false,
-      },
-      {
-        type: "question",
-        questionTitle: "How likely are you to recommend this to a friend or colleague?",
-        questionType: "multiplechoice",
-        options: ["Extremely Likely", "Very Likely", "Somewhat Likely", "Not Likely"],
-        required: true,
-      },
-      {
-        type: "question",
-        questionTitle: "Any additional comments or suggestions?",
-        questionType: "paragraph",
-        options: [],
-        required: false,
-      },
-    ],
-  };
-};
-
+/**
+ * 1. Generate Full Google Form from user prompt
+ */
 const generateFormWithAI = async (
   promptText: string,
-  userId?: string
-): Promise<any> => {
-  let generatedData: ICreateFormPayload | null = null;
-
-  if (config.gemini_api_key && config.gemini_api_key.trim() !== "") {
-    const ai = new GoogleGenAI({ apiKey: config.gemini_api_key.trim() });
-
-    for (const modelName of CANDIDATE_GEMINI_MODELS) {
-      try {
-        const response = await ai.models.generateContent({
-          model: modelName,
-          contents: `Create a complete Google Form for: "${promptText}". Provide relevant, high quality questions with clear options.`,
-          config: {
-            systemInstruction:
-              "You are an expert Google Forms Architect. Your sole job is to design complete, realistic, professional Google Forms based on user prompts.\n\nCRITICAL LANGUAGE RULE:\n- ALWAYS detect the language and script of the user's prompt (e.g. Bengali / বাংলা, Spanish, French, Arabic, Hindi, English, etc.) and generate ALL form names, titles, descriptions, question titles, and options in that EXACT SAME language and script as the prompt. If the prompt is written in Bengali, the entire form MUST be in Bengali.\n\nCRITICAL NAMING RULES:\n- 'name': The short document file name displayed in the top header in the prompt's language. MUST be concise (2 to 4 words max, e.g. 'সাধারণ জ্ঞান কুইজ', 'Coffee Shop Feedback', 'Class 8 Math Quiz').\n- 'title': The full, descriptive and engaging title displayed on the main form card in the prompt's language.\n\nQUESTION RULES:\n- Choose the most appropriate questionType for each field ('multiplechoice', 'checkbox', 'shortanswer', 'paragraph').\n- Include 4 to 8 realistic questions. For multiplechoice/checkbox questions, always provide 3 to 6 logical options in the prompt's language.",
-            responseMimeType: "application/json",
-            responseSchema: {
+  _userId?: string
+): Promise<ICreateFormPayload> => {
+  const parsed = await callGeminiJson<{
+    name?: string;
+    title?: string;
+    description?: string;
+    headerImage?: string;
+    items?: any[];
+  }>(
+    `Create a complete Google Form for: "${promptText}". Provide relevant, high quality questions with clear options.`,
+    {
+      systemInstruction:
+        "You are an expert Google Forms Architect. Your sole job is to design complete, realistic, professional Google Forms based on user prompts.\n\nCRITICAL LANGUAGE RULE:\n- ALWAYS detect the language and script of the user's prompt (e.g. Bengali / বাংলা, Spanish, French, Arabic, Hindi, English, etc.) and generate ALL form names, titles, descriptions, question titles, and options in that EXACT SAME language and script as the prompt.\n\nCRITICAL NAMING RULES:\n- 'name': The short document file name displayed in the top header in the prompt's language (2 to 4 words max).\n- 'title': The full, engaging title displayed on the main form card.\n\nQUESTION RULES:\n- Choose the most appropriate questionType ('multiplechoice', 'checkbox', 'shortanswer', 'paragraph').\n- Include 4 to 8 realistic questions. For multiplechoice/checkbox questions, always provide 3 to 6 logical options.",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING },
+          title: { type: Type.STRING },
+          description: { type: Type.STRING },
+          items: {
+            type: Type.ARRAY,
+            items: {
               type: Type.OBJECT,
               properties: {
-                name: { type: Type.STRING },
-                title: { type: Type.STRING },
-                description: { type: Type.STRING },
-                items: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      type: { type: Type.STRING },
-                      questionTitle: { type: Type.STRING },
-                      questionType: { type: Type.STRING },
-                      options: {
-                        type: Type.ARRAY,
-                        items: { type: Type.STRING },
-                      },
-                      required: { type: Type.BOOLEAN },
-                    },
-                    required: ["type", "questionTitle", "questionType"],
-                  },
-                },
-              },
-              required: ["name", "title", "description", "items"],
-            },
-          },
-        });
-
-        const textResponse = response.text;
-        if (textResponse) {
-          const cleanText = textResponse.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-          generatedData = JSON.parse(cleanText);
-          if (generatedData && Array.isArray(generatedData.items) && generatedData.items.length > 0) {
-            break;
-          }
-        }
-      } catch (err: any) {
-        console.warn(`Attempt with ${modelName} failed (${err?.message}), trying next model...`);
-      }
-    }
-  }
-
-  if (!generatedData) {
-    generatedData = generateFallbackForm(promptText);
-  }
-
-  // Sanitize items
-  const sanitizedItems: IFormItem[] = (generatedData.items || []).map((item) => {
-    const qType = normalizeQuestionType(item.questionType);
-    const needsOptions = ["multiplechoice", "checkbox", "dropdown"].includes(qType);
-    return {
-      type: "question",
-      questionTitle: item.questionTitle || "Untitled Question",
-      questionType: qType,
-      options: needsOptions
-        ? Array.isArray(item.options) && item.options.length > 0
-          ? item.options
-          : ["Option 1", "Option 2", "Option 3"]
-        : [],
-      required: Boolean(item.required),
-    };
-  });
-
-  const finalName = (generatedData.name || "").trim() || "Untitled form";
-  const finalTitle = (generatedData.title || "").trim() || "Untitled form";
-
-  const finalPayload: ICreateFormPayload = {
-    name: finalName,
-    title: finalTitle,
-    description: generatedData.description || "",
-    headerImage: generatedData.headerImage || "",
-    items: sanitizedItems.length > 0 ? sanitizedItems : [
-      { type: "question", questionTitle: "Untitled Question", questionType: "multiplechoice", options: ["Option 1"] }
-    ],
-  };
-
-  // Return structured form payload draft for preview & confirmation
-  return finalPayload;
-};
-
-const generateOptionsWithAI = async (
-  questionTitle: string,
-  questionType: string = "multiplechoice"
-): Promise<{ options: string[] }> => {
-  if (config.gemini_api_key && config.gemini_api_key.trim() !== "") {
-    const ai = new GoogleGenAI({ apiKey: config.gemini_api_key.trim() });
-    for (const modelName of CANDIDATE_GEMINI_MODELS) {
-      try {
-        const response = await ai.models.generateContent({
-          model: modelName,
-          contents: `Provide 4 to 6 logical, distinct, realistic answer choices for this survey question: "${questionTitle}" (Type: ${questionType}).`,
-          config: {
-            systemInstruction:
-              "You are a survey and form design specialist. Provide 4 to 6 concise, realistic choice options in the EXACT SAME language and script as the provided question (e.g. if question is in Bengali / বাংলা, return options in Bengali). Return only a JSON array of option strings.",
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
+                type: { type: Type.STRING },
+                questionTitle: { type: Type.STRING },
+                questionType: { type: Type.STRING },
                 options: {
                   type: Type.ARRAY,
                   items: { type: Type.STRING },
                 },
+                required: { type: Type.BOOLEAN },
               },
-              required: ["options"],
+              required: ["type", "questionTitle", "questionType"],
             },
           },
-        });
-
-        if (response.text) {
-          const parsed = JSON.parse(response.text);
-          if (Array.isArray(parsed.options) && parsed.options.length > 0) {
-            return { options: parsed.options.map((opt: any) => String(opt).trim()) };
-          }
-        }
-      } catch (err: any) {
-        console.warn(`generateOptionsWithAI failed with ${modelName}:`, err?.message);
-      }
+        },
+        required: ["name", "title", "description", "items"],
+      },
     }
-  }
+  );
 
-  // Fallback options based on keywords
-  const q = questionTitle.toLowerCase();
-  if (q.includes("experience") || q.includes("year")) {
-    return { options: ["Less than 1 year", "1-2 years", "3-5 years", "5+ years"] };
-  }
-  if (q.includes("rate") || q.includes("satisfied") || q.includes("satisfaction") || q.includes("how was")) {
-    return { options: ["Very Satisfied", "Satisfied", "Neutral", "Unsatisfied", "Very Unsatisfied"] };
-  }
-  if (q.includes("agree")) {
-    return { options: ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"] };
-  }
-  if (q.includes("how often") || q.includes("frequency")) {
-    return { options: ["Daily", "Weekly", "Monthly", "Rarely", "Never"] };
-  }
-  if (q.includes("gender")) {
-    return { options: ["Female", "Male", "Non-binary", "Prefer not to say"] };
-  }
-  if (q.includes("recommend")) {
-    return { options: ["Definitely", "Probably", "Not Sure", "Probably Not", "Definitely Not"] };
-  }
+  const fallback = generateFallbackForm(promptText);
+  const data = parsed && Array.isArray(parsed.items) && parsed.items.length > 0 ? parsed : fallback;
+  const sanitizedItems = sanitizeQuestionItems(data.items || []);
 
   return {
-    options: ["Option 1", "Option 2", "Option 3", "Option 4"],
+    name: (data.name || "").trim() || "Untitled form",
+    title: (data.title || "").trim() || "Untitled form",
+    description: data.description || "",
+    headerImage: data.headerImage || "",
+    items: sanitizedItems.length > 0 ? sanitizedItems : fallback.items,
   };
 };
 
+/**
+ * 2. Generate Choice Options for a specific question
+ */
+const generateOptionsWithAI = async (
+  questionTitle: string,
+  questionType: string = "multiplechoice"
+): Promise<{ options: string[] }> => {
+  const parsed = await callGeminiJson<{ options: string[] }>(
+    `Provide 4 to 6 logical, distinct, realistic answer choices for this survey question: "${questionTitle}" (Type: ${questionType}).`,
+    {
+      systemInstruction:
+        "You are a survey and form design specialist. Provide 4 to 6 concise, realistic choice options in the EXACT SAME language and script as the provided question. Return only a JSON array of option strings.",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          options: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+          },
+        },
+        required: ["options"],
+      },
+    }
+  );
+
+  if (parsed && Array.isArray(parsed.options) && parsed.options.length > 0) {
+    return { options: parsed.options.map((opt) => String(opt).trim()) };
+  }
+
+  return { options: getFallbackOptions(questionTitle) };
+};
+
+/**
+ * 3. Generate 1 or multiple Questions based on prompt & optional context
+ */
 const generateQuestionWithAI = async (
   promptText: string,
   context?: string
@@ -273,96 +115,48 @@ const generateQuestionWithAI = async (
   const cleanPrompt = promptText.trim();
   const effectiveContext = context && context.trim() !== "Untitled form" ? context.trim() : "";
 
-  if (config.gemini_api_key && config.gemini_api_key.trim() !== "") {
-    const ai = new GoogleGenAI({ apiKey: config.gemini_api_key.trim() });
-    for (const modelName of CANDIDATE_GEMINI_MODELS) {
-      try {
-        const response = await ai.models.generateContent({
-          model: modelName,
-          contents: `Create Google Form questions for: "${cleanPrompt}". ${effectiveContext ? `Form Context / Topic: "${effectiveContext}".` : "Context: General project / survey topic"}`,
-          config: {
-            systemInstruction:
-              "You are an expert Google Forms Architect.\n\nCRITICAL QUESTION COUNT RULES:\n- If the user prompt requests a specific number of questions (e.g. '1 question', '2 questions', '3 questions', '5 questions'), generate EXACTLY that number of questions.\n- If NO number of questions is specified in the prompt, generate 2 to 4 diverse, high-quality questions covering different aspects of the topic.\n- Only generate 1 single question if the prompt explicitly asks for 1 question.\n\nCRITICAL LANGUAGE RULE:\n- ALWAYS detect and match the language and script of the user's prompt (e.g. Bengali / বাংলা). If the prompt is in Bengali, generate questions and all options in Bengali.\n\nQUESTION RULES:\n- Never output placeholder names like 'Option 1, Option 2, Option 3'. Always create realistic, relevant options matching the question.\n- Select the best questionType ('multiplechoice', 'checkbox', 'shortanswer', 'paragraph') for each question.\n- For multiplechoice and checkbox, provide 3 to 5 realistic, logical options.",
-            responseMimeType: "application/json",
-            responseSchema: {
+  const parsed = await callGeminiJson<{ questions?: any[]; question?: any }>(
+    `Create Google Form questions for: "${cleanPrompt}". ${effectiveContext ? `Form Context / Topic: "${effectiveContext}".` : "Context: General project / survey topic"}`,
+    {
+      systemInstruction:
+        "You are an expert Google Forms Architect.\n\nCRITICAL QUESTION COUNT RULES:\n- If the user prompt requests a specific number of questions (e.g. '1 question', '2 questions', '3 questions', '5 questions'), generate EXACTLY that number of questions.\n- If NO number of questions is specified, generate 2 to 4 diverse, high-quality questions.\n- Only generate 1 single question if the prompt explicitly asks for 1 question.\n\nCRITICAL LANGUAGE RULE:\n- ALWAYS match the language and script of the user's prompt (e.g. Bengali / বাংলা).\n\nQUESTION RULES:\n- Never output placeholder names like 'Option 1'. Always create realistic, relevant options.\n- Select the best questionType ('multiplechoice', 'checkbox', 'shortanswer', 'paragraph').",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          questions: {
+            type: Type.ARRAY,
+            items: {
               type: Type.OBJECT,
               properties: {
-                questions: {
+                type: { type: Type.STRING },
+                questionTitle: { type: Type.STRING },
+                questionType: { type: Type.STRING },
+                options: {
                   type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      type: { type: Type.STRING },
-                      questionTitle: { type: Type.STRING },
-                      questionType: { type: Type.STRING },
-                      options: {
-                        type: Type.ARRAY,
-                        items: { type: Type.STRING },
-                      },
-                      required: { type: Type.BOOLEAN },
-                    },
-                    required: ["type", "questionTitle", "questionType"],
-                  },
+                  items: { type: Type.STRING },
                 },
+                required: { type: Type.BOOLEAN },
               },
-              required: ["questions"],
+              required: ["type", "questionTitle", "questionType"],
             },
           },
-        });
-
-        if (response.text) {
-          const cleanText = response.text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-          const parsed = JSON.parse(cleanText);
-          const rawQuestions = Array.isArray(parsed.questions)
-            ? parsed.questions
-            : parsed.question
-            ? [parsed.question]
-            : [];
-
-          if (rawQuestions.length > 0) {
-            const sanitizedQuestions: IFormItem[] = rawQuestions.map((q: any) => {
-              const qType = normalizeQuestionType(q.questionType);
-              const needsOptions = ["multiplechoice", "checkbox"].includes(qType);
-              return {
-                type: "question",
-                questionTitle: q.questionTitle || "Untitled Question",
-                questionType: qType,
-                options: needsOptions
-                  ? Array.isArray(q.options) && q.options.length > 0
-                    ? q.options
-                    : ["Yes", "No", "Maybe"]
-                  : [],
-                required: Boolean(q.required),
-              };
-            });
-
-            return { questions: sanitizedQuestions };
-          }
-        }
-      } catch (err: any) {
-        console.warn(`generateQuestionWithAI failed with ${modelName}:`, err?.message);
-      }
+        },
+        required: ["questions"],
+      },
     }
+  );
+
+  const rawQuestions = parsed?.questions || (parsed?.question ? [parsed.question] : []);
+  if (Array.isArray(rawQuestions) && rawQuestions.length > 0) {
+    return { questions: sanitizeQuestionItems(rawQuestions) };
   }
 
-  // Smart fallback matching question count if AI is offline
-  const matchNum = cleanPrompt.match(/(\d+)\s*(?:question|item)/i);
-  const count = matchNum ? Math.min(Math.max(parseInt(matchNum[1], 10), 1), 5) : 2;
-  const fallbackList: IFormItem[] = [];
-
-  for (let i = 1; i <= count; i++) {
-    fallbackList.push({
-      type: "question",
-      questionTitle: count === 1 ? cleanPrompt || "Untitled Question" : `Question ${i}: ${cleanPrompt}`,
-      questionType: "multiplechoice",
-      options: ["Strongly Agree", "Agree", "Neutral", "Disagree"],
-      required: false,
-    });
-  }
-
-  return { questions: fallbackList };
+  return { questions: getFallbackQuestions(cleanPrompt) };
 };
 
+/**
+ * 4. Edit or Refine an existing Question or Form Header
+ */
 const editQuestionWithAI = async (
   instruction: string,
   currentQuestion: Partial<IFormItem> & { isHeader?: boolean; title?: string },
@@ -370,105 +164,69 @@ const editQuestionWithAI = async (
 ): Promise<{ question?: IFormItem; header?: { title: string; description: string } }> => {
   const isHeader = Boolean(currentQuestion.isHeader || (currentQuestion.type as string) === "header");
 
-  if (config.gemini_api_key && config.gemini_api_key.trim() !== "") {
-    const ai = new GoogleGenAI({ apiKey: config.gemini_api_key.trim() });
-    for (const modelName of CANDIDATE_GEMINI_MODELS) {
-      try {
-        if (isHeader) {
-          const response = await ai.models.generateContent({
-            model: modelName,
-            contents: `Refine/rewrite the following Google Form Title and Description based on the user's instruction.
-Instruction: "${instruction}"
-Current Form Title: "${currentQuestion.title || currentQuestion.questionTitle || formTitle || "Untitled form"}"
-Current Form Description: "${currentQuestion.description || ""}"`,
-            config: {
-              systemInstruction:
-                "You are an expert Google Forms Architect. Polish or rewrite the form title and description to make it professional, engaging, and clear based on the user instruction. CRITICAL: Preserve and use the same language and script (e.g. Bengali / বাংলা if the instruction or current text is in Bengali). Return JSON with 'title' and 'description'.",
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                },
-                required: ["title", "description"],
-              },
-            },
-          });
-
-          if (response.text) {
-            const cleanText = response.text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-            const parsed = JSON.parse(cleanText);
-            return {
-              header: {
-                title: parsed.title || "Untitled form",
-                description: parsed.description || "",
-              },
-            };
-          }
-        } else {
-          const response = await ai.models.generateContent({
-            model: modelName,
-            contents: `Modify and refine the following Google Form question according to the user's instruction.
-Instruction: "${instruction}"
-Current Question Title: "${currentQuestion.questionTitle || "Untitled Question"}"
-Current Question Type: "${currentQuestion.questionType || "multiplechoice"}"
-Current Options: ${JSON.stringify(currentQuestion.options || [])}
-${formTitle ? `Form Context: "${formTitle}"` : ""}`,
-            config: {
-              systemInstruction:
-                "You are an expert Google Forms Architect. Your job is to edit, refine, polish, or rewrite the provided question according to the user's instructions (e.g. improving tone, changing question type, rephrasing, generating better options, or adding description guidelines). Always return a complete question object with appropriate questionType and options.",
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  questionTitle: { type: Type.STRING },
-                  questionType: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  options: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING },
-                  },
-                  required: { type: Type.BOOLEAN },
-                },
-                required: ["questionTitle", "questionType"],
-              },
-            },
-          });
-
-          if (response.text) {
-            const cleanText = response.text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-            const parsed = JSON.parse(cleanText);
-            const qType = normalizeQuestionType(parsed.questionType || currentQuestion.questionType);
-            const needsOptions = ["multiplechoice", "checkbox", "dropdown"].includes(qType);
-            return {
-              question: {
-                type: "question",
-                questionTitle: parsed.questionTitle || currentQuestion.questionTitle || "Untitled Question",
-                questionType: qType,
-                description: parsed.description || currentQuestion.description || "",
-                options: needsOptions
-                  ? Array.isArray(parsed.options) && parsed.options.length > 0
-                    ? parsed.options
-                    : currentQuestion.options || ["Option 1", "Option 2"]
-                  : [],
-                required: Boolean(parsed.required ?? currentQuestion.required),
-              },
-            };
-          }
-        }
-      } catch (err: any) {
-        console.warn(`editQuestionWithAI failed with ${modelName}:`, err?.message);
-      }
-    }
-  }
-
-  // Fallback if AI fails
   if (isHeader) {
+    const parsed = await callGeminiJson<{ title?: string; description?: string }>(
+      `Refine/rewrite the following Google Form Title and Description based on the user's instruction.\nInstruction: "${instruction}"\nCurrent Form Title: "${currentQuestion.title || currentQuestion.questionTitle || formTitle || "Untitled form"}"\nCurrent Form Description: "${currentQuestion.description || ""}"`,
+      {
+        systemInstruction:
+          "You are an expert Google Forms Architect. Polish or rewrite the form title and description to make it professional, engaging, and clear. CRITICAL: Preserve and use the same language and script (e.g. Bengali / বাংলা). Return JSON with 'title' and 'description'.",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            description: { type: Type.STRING },
+          },
+          required: ["title", "description"],
+        },
+      }
+    );
+
     return {
       header: {
-        title: currentQuestion.title || currentQuestion.questionTitle || formTitle || "Untitled form",
-        description: currentQuestion.description || "",
+        title: parsed?.title || currentQuestion.title || currentQuestion.questionTitle || formTitle || "Untitled form",
+        description: parsed?.description ?? (currentQuestion.description || ""),
+      },
+    };
+  }
+
+  const parsed = await callGeminiJson<any>(
+    `Modify and refine the following Google Form question according to the user's instruction.\nInstruction: "${instruction}"\nCurrent Question Title: "${currentQuestion.questionTitle || "Untitled Question"}"\nCurrent Question Type: "${currentQuestion.questionType || "multiplechoice"}"\nCurrent Options: ${JSON.stringify(currentQuestion.options || [])}\n${formTitle ? `Form Context: "${formTitle}"` : ""}`,
+    {
+      systemInstruction:
+        "You are an expert Google Forms Architect. Your job is to edit, refine, polish, or rewrite the provided question according to the user's instructions (improving tone, changing question type, rephrasing, or generating better options). Always return a complete question object.",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          questionTitle: { type: Type.STRING },
+          questionType: { type: Type.STRING },
+          description: { type: Type.STRING },
+          options: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+          },
+          required: { type: Type.BOOLEAN },
+        },
+        required: ["questionTitle", "questionType"],
+      },
+    }
+  );
+
+  if (parsed) {
+    const qType = normalizeQuestionType(parsed.questionType || currentQuestion.questionType);
+    const needsOptions = ["multiplechoice", "checkbox", "dropdown"].includes(qType);
+
+    return {
+      question: {
+        type: "question",
+        questionTitle: parsed.questionTitle || currentQuestion.questionTitle || "Untitled Question",
+        questionType: qType,
+        description: parsed.description ?? currentQuestion.description ?? "",
+        options: needsOptions
+          ? Array.isArray(parsed.options) && parsed.options.length > 0
+            ? parsed.options
+            : currentQuestion.options || ["Option 1", "Option 2"]
+          : [],
+        required: Boolean(parsed.required ?? currentQuestion.required),
       },
     };
   }
@@ -485,6 +243,9 @@ ${formTitle ? `Form Context: "${formTitle}"` : ""}`,
   };
 };
 
+/**
+ * 5. Generate High-Res Image with AI (Base64 Data URI Conversion)
+ */
 const generateImageWithAI = async (
   promptText: string,
   aspectRatio: string = "16:9",
@@ -518,146 +279,94 @@ const generateImageWithAI = async (
     console.warn("Direct image buffer download fallback:", err?.message);
   }
 
-  // Fallback to direct URL if buffer conversion timed out
   return { imageUrl: generatorUrl };
 };
 
-interface AIResponsesSummary {
-  executiveSummary: string;
-  sentiment: {
-    positive: number;
-    neutral: number;
-    negative: number;
-  };
-  keyThemes: string[];
-  recommendations: string[];
-  responseCount: number;
-}
-
+/**
+ * 6. Summarize Form Responses & Calculate Sentiment Insights
+ */
 const summarizeResponsesWithAI = async (
   formTitle: string,
   questions: any[] = [],
   responses: any[] = []
-): Promise<AIResponsesSummary> => {
+): Promise<IAIResponsesSummary> => {
   const count = responses.length;
-
   if (count === 0) {
+    return getFallbackSummary(0, formTitle);
+  }
+
+  const questionsMap: Record<number, string> = {};
+  questions.forEach((q, idx) => {
+    if (q.questionTitle) questionsMap[idx] = q.questionTitle;
+  });
+
+  const formattedResponses = responses
+    .slice(0, 100)
+    .map((r, rIdx) => {
+      const answersText = Array.isArray(r.answers)
+        ? r.answers
+            .map((a: any) => {
+              const qTitle = questionsMap[a.itemIndex] || `Question ${a.itemIndex + 1}`;
+              const val = Array.isArray(a.value) ? a.value.join(", ") : String(a.value ?? "");
+              return `  - ${qTitle}: "${val}"`;
+            })
+            .join("\n")
+        : "  No answers recorded";
+      return `Response #${rIdx + 1}:\n${answersText}`;
+    })
+    .join("\n\n");
+
+  const parsed = await callGeminiJson<IAIResponsesSummary>(
+    `Analyze the following responses submitted for the form titled: "${formTitle || 'Untitled Form'}".\n\nTotal Responses Submitted: ${count}\nSample Submissions:\n${formattedResponses}\n\nGenerate an analytical summary in JSON with executiveSummary, sentiment ({ positive, neutral, negative }), keyThemes (string[]), and recommendations (string[]).`,
+    {
+      systemInstruction:
+        "You are a professional survey research and business intelligence analyst. Generate a comprehensive analytical summary in strict JSON format. Sentiment positive + neutral + negative must equal 100.",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          executiveSummary: { type: Type.STRING },
+          sentiment: {
+            type: Type.OBJECT,
+            properties: {
+              positive: { type: Type.NUMBER },
+              neutral: { type: Type.NUMBER },
+              negative: { type: Type.NUMBER },
+            },
+            required: ["positive", "neutral", "negative"],
+          },
+          keyThemes: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+          },
+          recommendations: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+          },
+        },
+        required: ["executiveSummary", "sentiment", "keyThemes", "recommendations"],
+      },
+    }
+  );
+
+  if (parsed && parsed.executiveSummary) {
     return {
-      executiveSummary: "No responses have been submitted to this form yet.",
-      sentiment: { positive: 0, neutral: 100, negative: 0 },
-      keyThemes: ["Waiting for initial submissions"],
-      recommendations: ["Share the form link to start collecting responses"],
-      responseCount: 0,
+      executiveSummary: parsed.executiveSummary,
+      sentiment: {
+        positive: typeof parsed.sentiment?.positive === "number" ? parsed.sentiment.positive : 70,
+        neutral: typeof parsed.sentiment?.neutral === "number" ? parsed.sentiment.neutral : 20,
+        negative: typeof parsed.sentiment?.negative === "number" ? parsed.sentiment.negative : 10,
+      },
+      keyThemes: Array.isArray(parsed.keyThemes) && parsed.keyThemes.length > 0
+        ? parsed.keyThemes
+        : ["Consistent respondent engagement", "Clear preferences identified"],
+      recommendations: Array.isArray(parsed.recommendations) && parsed.recommendations.length > 0
+        ? parsed.recommendations
+        : ["Continue collecting responses for deeper statistical trends", "Implement top requested improvements"],
+      responseCount: count,
     };
   }
 
-  // Format responses into clear textual context
-  const questionsMap: Record<number, string> = {};
-  questions.forEach((q, idx) => {
-    if (q.questionTitle) {
-      questionsMap[idx] = q.questionTitle;
-    }
-  });
-
-  const formattedResponses = responses.slice(0, 100).map((r, rIdx) => {
-    const answersText = Array.isArray(r.answers)
-      ? r.answers
-          .map((a: any) => {
-            const qTitle = questionsMap[a.itemIndex] || `Question ${a.itemIndex + 1}`;
-            const val = Array.isArray(a.value) ? a.value.join(", ") : String(a.value ?? "");
-            return `  - ${qTitle}: "${val}"`;
-          })
-          .join("\n")
-      : "  No answers recorded";
-    return `Response #${rIdx + 1}:\n${answersText}`;
-  }).join("\n\n");
-
-  const prompt = `You are a professional survey research and business intelligence analyst.
-Analyze the following responses submitted for the form titled: "${formTitle || 'Untitled Form'}".
-
-Total Responses Submitted: ${count}
-Sample Submissions:
-${formattedResponses}
-
-Generate a comprehensive analytical summary in strict JSON format:
-{
-  "executiveSummary": "2-3 crisp sentences summarizing overall respondent satisfaction, key takeaways, and major patterns.",
-  "sentiment": {
-    "positive": 70,
-    "neutral": 20,
-    "negative": 10
-  },
-  "keyThemes": [
-    "Theme 1: Brief explanation of finding",
-    "Theme 2: Brief explanation of finding",
-    "Theme 3: Brief explanation of finding"
-  ],
-  "recommendations": [
-    "Actionable recommendation 1",
-    "Actionable recommendation 2",
-    "Actionable recommendation 3"
-  ]
-}
-
-Return ONLY the raw JSON object. No explanations, no markdown formatting.`;
-
-  if (config.gemini_api_key && config.gemini_api_key.trim() !== "") {
-    const ai = new GoogleGenAI({ apiKey: config.gemini_api_key.trim() });
-
-    for (const modelName of CANDIDATE_GEMINI_MODELS) {
-      try {
-        const response = await ai.models.generateContent({
-          model: modelName,
-          contents: prompt,
-        });
-
-        const rawText = response.text?.trim() || "";
-        if (rawText) {
-          const cleanJson = rawText
-            .replace(/```(?:json)?/gi, "")
-            .replace(/```/g, "")
-            .trim();
-
-          const parsed = JSON.parse(cleanJson);
-          if (parsed && parsed.executiveSummary) {
-            return {
-              executiveSummary: parsed.executiveSummary,
-              sentiment: {
-                positive: typeof parsed.sentiment?.positive === "number" ? parsed.sentiment.positive : 70,
-                neutral: typeof parsed.sentiment?.neutral === "number" ? parsed.sentiment.neutral : 20,
-                negative: typeof parsed.sentiment?.negative === "number" ? parsed.sentiment.negative : 10,
-              },
-              keyThemes: Array.isArray(parsed.keyThemes) && parsed.keyThemes.length > 0
-                ? parsed.keyThemes
-                : ["Consistent respondent engagement", "Clear preferences identified"],
-              recommendations: Array.isArray(parsed.recommendations) && parsed.recommendations.length > 0
-                ? parsed.recommendations
-                : ["Continue collecting responses for deeper statistical trends", "Implement top requested improvements"],
-              responseCount: count,
-            };
-          }
-        }
-      } catch (err: any) {
-        console.warn(`summarizeResponsesWithAI failed with ${modelName}:`, err?.message);
-      }
-    }
-  }
-
-  // Fallback summary
-  return {
-    executiveSummary: `Analyzed ${count} response(s) for "${formTitle || 'this form'}". Respondents have provided initial feedback across all questions.`,
-    sentiment: { positive: 65, neutral: 25, negative: 10 },
-    keyThemes: [
-      "Broad interest in the form's core topic",
-      "Varied preferences across choices",
-      "Constructive suggestions provided in open-ended fields",
-    ],
-    recommendations: [
-      "Monitor response trends as more submissions arrive",
-      "Follow up on specific respondent suggestions",
-    ],
-    responseCount: count,
-  };
+  return getFallbackSummary(count, formTitle);
 };
 
 export const AiService = {
