@@ -132,10 +132,30 @@ const generateImageWithAI = catchAsync(
 	},
 );
 
+const summarizeResponsesWithAI = catchAsync(
+	async (req: Request, res: Response) => {
+		const { formTitle, questions, responses } = req.body;
+
+		const result = await AiService.summarizeResponsesWithAI(
+			formTitle || "Untitled form",
+			Array.isArray(questions) ? questions : [],
+			Array.isArray(responses) ? responses : [],
+		);
+
+		sendResponse(res, {
+			statusCode: httpStatus.OK,
+			success: true,
+			message: "Responses summarized successfully with AI.",
+			data: result,
+		});
+	},
+);
+
 export const AiController = {
 	generateFormWithAI,
 	generateOptionsWithAI,
 	generateQuestionWithAI,
 	editQuestionWithAI,
 	generateImageWithAI,
+	summarizeResponsesWithAI,
 };

@@ -9,5 +9,6 @@ router.post("/generate-options", optionalAuth, AiController.generateOptionsWithA
 router.post("/generate-question", optionalAuth, AiController.generateQuestionWithAI);
 router.post("/edit-question", optionalAuth, AiController.editQuestionWithAI);
 router.post("/generate-image", optionalAuth, AiController.generateImageWithAI);
+router.post("/summarize-responses", optionalAuth, AiController.summarizeResponsesWithAI);
 
 export const AiRoutes = router;
