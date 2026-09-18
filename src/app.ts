@@ -8,26 +8,42 @@ import config from "./config";
 
 const app: Application = express();
 
-const allowedOrigins = [
+const configuredOrigins = (config.client_url || "")
+  .split(",")
+  .map((url) => url.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+
+const defaultOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
   "http://127.0.0.1:5173",
   "http://127.0.0.1:3000",
-  config.client_url,
-].filter(Boolean) as string[];
+];
+
+const allowedOrigins = [...new Set([...defaultOrigins, ...configuredOrigins])];
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, Postman, curl)
+      // Allow requests with no origin (like mobile apps, Postman, server-to-server)
       if (!origin) return callback(null, true);
+
+      // In non-production, allow all
+      if (config.env !== "production") {
+        return callback(null, true);
+      }
+
+      // Check allowed origins list, wildcard, or Vercel preview domains
+      const normalizedOrigin = origin.replace(/\/$/, "");
       if (
-        allowedOrigins.includes(origin) ||
-        config.env !== "production"
+        allowedOrigins.includes(normalizedOrigin) ||
+        allowedOrigins.includes("*") ||
+        normalizedOrigin.endsWith(".vercel.app")
       ) {
         return callback(null, true);
       }
-      return callback(new Error("Not allowed by CORS"));
+
+      return callback(new Error(`Not allowed by CORS: ${origin}`));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
