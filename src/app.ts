@@ -62,6 +62,17 @@ app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 app.use("/api/v1", routes);
 app.use("/api", routes); // backwards compatibility for /api
 
+// Root welcome route
+app.get("/", (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: "Welcome to Google Form Clone API!",
+    version: "1.0.0",
+    health: "/health",
+    api: "/api/v1",
+  });
+});
+
 // Healthcheck route
 app.get("/health", (req: Request, res: Response) => {
   res.json({
